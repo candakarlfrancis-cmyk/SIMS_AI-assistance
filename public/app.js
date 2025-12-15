@@ -9,6 +9,7 @@ const chatBox = document.getElementById("chatBox");
 const chatInput = document.getElementById("chatInput");
 const chatSendBtn = document.getElementById("chatSendBtn");
 
+<<<<<<< HEAD
 const prevPageBtn = document.getElementById("prevPage");
 const nextPageBtn = document.getElementById("nextPage");
 const pageInfo = document.getElementById("pageInfo");
@@ -24,10 +25,19 @@ const pageSize = 10;
 function showToast(message, type = "success") {
   const toast = document.getElementById("toast");
   toast.textContent = message;
+=======
+// ✅ Toast Function (Bottom Right)
+function showToast(message, type = "success") {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+
+  // Apply base class + dynamic color
+>>>>>>> a009e6c297aa7270d4de38794fcb749538764fce
   toast.className =
     "fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white shadow-lg transition duration-300 pointer-events-none " +
     (type === "success" ? "bg-green-600" : "bg-red-600");
 
+<<<<<<< HEAD
   toast.style.opacity = "1";
   toast.style.transform = "translateY(0)";
 
@@ -38,6 +48,20 @@ function showToast(message, type = "success") {
 }
 
 // Fetch students
+=======
+  // Show toast
+  toast.style.opacity = "1";
+  toast.style.transform = "translateY(0)"; // slides in clean
+
+  // Hide after 2 seconds
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(20px)"; // smooth slide down
+  }, 2000);
+}
+
+// ✅ Fetch Students
+>>>>>>> a009e6c297aa7270d4de38794fcb749538764fce
 async function fetchStudents() {
   try {
     const res = await fetch("/students");
@@ -52,7 +76,11 @@ async function fetchStudents() {
   }
 }
 
+<<<<<<< HEAD
 // Render table with pagination
+=======
+// ✅ Render Table
+>>>>>>> a009e6c297aa7270d4de38794fcb749538764fce
 function renderTable(list) {
   if (!Array.isArray(list) || list.length === 0) {
     studentsTbody.innerHTML =
@@ -91,6 +119,7 @@ function renderTable(list) {
   });
 }
 
+<<<<<<< HEAD
 
 // Pagination controls
 
@@ -100,12 +129,21 @@ function populateProgramFilter(data) {
   const uniquePrograms = [...new Set(data.map((s) => s.Program))].filter(
     Boolean
   );
+=======
+// ✅ Populate Program Filter
+function populateProgramFilter(data) {
+  const uniquePrograms = [...new Set(data.map((s) => s.Program))];
+>>>>>>> a009e6c297aa7270d4de38794fcb749538764fce
   programFilter.innerHTML =
     `<option value="">All Programs</option>` +
     uniquePrograms.map((p) => `<option>${p}</option>`).join("");
 }
 
+<<<<<<< HEAD
 // Add student
+=======
+// ✅ Handle Add Student + Toast + Field Clear
+>>>>>>> a009e6c297aa7270d4de38794fcb749538764fce
 addStudentBtn.addEventListener("click", async () => {
   const newStudent = {
     "Student ID": document.getElementById("studentID").value.trim(),
@@ -122,6 +160,65 @@ addStudentBtn.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newStudent),
+<<<<<<< HEAD
+=======
+    });
+
+    if (res.ok) {
+      showToast("✅ Student added successfully!", "success");
+
+      // ✅ Auto Clear Fields
+      document.getElementById("studentID").value = "";
+      document.getElementById("fullName").value = "";
+      document.getElementById("gender").value = "";
+      document.getElementById("gmail").value = "";
+      document.getElementById("program").value = "";
+      document.getElementById("yearLevel").value = "";
+      document.getElementById("university").value = "";
+
+      fetchStudents(); // refresh table
+    } else {
+      const errorData = await res.json();
+      showToast("❌ " + (errorData.error || "Failed to add student"), "error");
+    }
+  } catch (err) {
+    showToast("❌ Server error. Please try again.", "error");
+  }
+});
+
+// ✅ Handle Delete + Toast
+async function handleDelete(e) {
+  const id = decodeURIComponent(e.target.getAttribute("data-id"));
+  if (!confirm("Are you sure you want to delete this student?")) return;
+
+  try {
+    const res = await fetch(`/students/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast("🗑️ Student deleted successfully!", "success");
+      fetchStudents(); // refresh table
+    } else {
+      showToast("❌ Failed to delete student.", "error");
+    }
+  } catch (err) {
+    showToast("❌ Server error on delete.", "error");
+  }
+}
+
+// ✅ Live Search & Filter
+[searchInput, genderFilter, programFilter].forEach((el) => {
+  el.addEventListener("input", () => {
+    const searchTerm = searchInput.value.toLowerCase();
+    const genderTerm = genderFilter.value;
+    const programTerm = programFilter.value;
+
+    const filtered = students.filter((s) => {
+      return (
+        (s["Full Name"].toLowerCase().includes(searchTerm) ||
+          s.Program.toLowerCase().includes(searchTerm)) &&
+        (genderTerm === "" || s.Gender === genderTerm) &&
+        (programTerm === "" || s.Program === programTerm)
+      );
+>>>>>>> a009e6c297aa7270d4de38794fcb749538764fce
     });
 
     if (res.ok) {
