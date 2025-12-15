@@ -5,29 +5,64 @@ const genderFilter = document.getElementById("genderFilter");
 const programFilter = document.getElementById("programFilter");
 const addStudentBtn = document.getElementById("addStudentBtn");
 
-let students = [];
+const chatBox = document.getElementById("chatBox");
+const chatInput = document.getElementById("chatInput");
+const chatSendBtn = document.getElementById("chatSendBtn");
 
-// ✅ Fetch Students from Backend
+const prevPageBtn = document.getElementById("prevPage");
+const nextPageBtn = document.getElementById("nextPage");
+const pageInfo = document.getElementById("pageInfo");
+
+const navAi = document.getElementById("navAi");
+const aiSection = document.getElementById("aiSection");
+
+let students = [];
+let currentPage = 1;
+const pageSize = 10;
+
+// Toast
+function showToast(message, type = "success") {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.className =
+    "fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white shadow-lg transition duration-300 pointer-events-none " +
+    (type === "success" ? "bg-green-600" : "bg-red-600");
+
+  toast.style.opacity = "1";
+  toast.style.transform = "translateY(0)";
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(20px)";
+  }, 2000);
+}
+
+// Fetch students
 async function fetchStudents() {
   try {
     const res = await fetch("/students");
     students = await res.json();
     populateProgramFilter(students);
+    currentPage = 1;
     renderTable(students);
   } catch (err) {
-    studentsTbody.innerHTML = `<tr><td colspan="8" class="px-3 py-4 text-center text-slate-500">Could not load students.</td></tr>`;
+    studentsTbody.innerHTML =
+      '<tr><td colspan="8" class="px-3 py-4 text-center text-slate-500">Could not load students.</td></tr>';
+    updatePagination(1);
   }
 }
 
-// ✅ Render Table (with truncate + no horizontal scroll)
+// Render table with pagination
 function renderTable(list) {
   if (!Array.isArray(list) || list.length === 0) {
-    studentsTbody.innerHTML = `<tr><td colspan="8" class="px-3 py-4 text-center text-slate-500">No records found</td></tr>`;
+    studentsTbody.innerHTML =
+      '<tr><td colspan="8" class="px-3 py-4 text-center text-slate-500">No records found</td></tr>';
     recordCount.textContent = 0;
     return;
   }
 
   recordCount.textContent = list.length;
+
   studentsTbody.innerHTML = list
     .map(
       (s) => `
@@ -51,64 +86,197 @@ function renderTable(list) {
     )
     .join("");
 
-  // ✅ Reattach delete events
   document.querySelectorAll(".deleteBtn").forEach((btn) => {
     btn.addEventListener("click", handleDelete);
   });
 }
 
-// ✅ Populate Program Filter Dropdown
+
+// Pagination controls
+
+
+// Program filter
 function populateProgramFilter(data) {
-  const uniquePrograms = [...new Set(data.map(s => s.Program))];
-  programFilter.innerHTML = `<option value="">All Programs</option>` + uniquePrograms.map(p => `<option>${p}</option>`).join("");
+  const uniquePrograms = [...new Set(data.map((s) => s.Program))].filter(
+    Boolean
+  );
+  programFilter.innerHTML =
+    `<option value="">All Programs</option>` +
+    uniquePrograms.map((p) => `<option>${p}</option>`).join("");
 }
 
-// ✅ Handle Add
+// Add student
 addStudentBtn.addEventListener("click", async () => {
   const newStudent = {
-    "Student ID": document.getElementById("studentID").value,
-    "Full Name": document.getElementById("fullName").value,
-    "Gender": document.getElementById("gender").value,
-    Gmail: document.getElementById("gmail").value,
-    Program: document.getElementById("program").value,
-    "Year Level": document.getElementById("yearLevel").value,
-    University: document.getElementById("university").value,
+    "Student ID": document.getElementById("studentID").value.trim(),
+    "Full Name": document.getElementById("fullName").value.trim(),
+    Gender: document.getElementById("gender").value.trim(),
+    Gmail: document.getElementById("gmail").value.trim(),
+    Program: document.getElementById("program").value.trim(),
+    "Year Level": document.getElementById("yearLevel").value.trim(),
+    University: document.getElementById("university").value.trim(),
   };
 
-  const res = await fetch("/students", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(newStudent),
-  });
-
-  if (res.ok) fetchStudents(); // refresh table
-});
-
-// ✅ Handle Delete
-async function handleDelete(e) {
-  const id = e.target.getAttribute("data-id");
-  await fetch(`/students/${id}`, { method: "DELETE" });
-  fetchStudents(); // refresh
-}
-
-// ✅ Live Search & Filter
-[searchInput, genderFilter, programFilter].forEach((el) => {
-  el.addEventListener("input", () => {
-    const searchTerm = searchInput.value.toLowerCase();
-    const genderTerm = genderFilter.value;
-    const programTerm = programFilter.value;
-
-    const filtered = students.filter((s) => {
-      return (
-        (s["Full Name"].toLowerCase().includes(searchTerm) || s.Program.toLowerCase().includes(searchTerm)) &&
-        (genderTerm === "" || s.Gender === genderTerm) &&
-        (programTerm === "" || s.Program === programTerm)
-      );
+  try {
+    const res = await fetch("/students", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newStudent),
     });
 
-    renderTable(filtered);
+    if (res.ok) {
+      showToast("✅ Student added successfully!", "success");
+      document.getElementById("studentID").value = "";
+      document.getElementById("fullName").value = "";
+      document.getElementById("gender").value = "";
+      document.getElementById("gmail").value = "";
+      document.getElementById("program").value = "";
+      document.getElementById("yearLevel").value = "";
+      document.getElementById("university").value = "";
+      await fetchStudents();
+    } else {
+      const errorData = await res.json();
+      showToast(
+        "❌ " + (errorData.error || "Failed to add student"),
+        "error"
+      );
+    }
+  } catch (err) {
+    showToast("❌ Server error. Please try again.", "error");
+  }
+});
+
+// Delete
+async function handleDelete(e) {
+  const id = decodeURIComponent(e.target.getAttribute("data-id"));
+  if (!confirm("Are you sure you want to delete this student?")) return;
+
+  try {
+    const res = await fetch(`/students/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast("🗑️ Student deleted successfully!", "success");
+      await fetchStudents();
+    } else {
+      showToast("❌ Failed to delete student.", "error");
+    }
+  } catch (err) {
+    showToast("❌ Server error on delete.", "error");
+  }
+}
+
+// Helper: apply filters + render
+function applyFiltersAndRender() {
+  const searchTerm = searchInput.value.toLowerCase();
+  const genderTerm = genderFilter.value;
+  const programTerm = programFilter.value;
+
+  const filtered = students.filter((s) => {
+    return (
+      (s["Full Name"].toLowerCase().includes(searchTerm) ||
+        s.Program.toLowerCase().includes(searchTerm)) &&
+      (genderTerm === "" || s.Gender === genderTerm) &&
+      (programTerm === "" || s.Program === programTerm)
+    );
+  });
+
+  renderTable(filtered);
+}
+
+// Search + filter listeners
+[searchInput, genderFilter, programFilter].forEach((el) => {
+  el.addEventListener("input", () => {
+    currentPage = 1;
+    applyFiltersAndRender();
   });
 });
 
-// ✅ Initial Load
+// Chat helpers
+function addChatMessage(role, text) {
+  if (!chatBox) return;
+  const wrapper = document.createElement("div");
+  wrapper.className = role === "user" ? "mb-2 text-right" : "mb-2 text-left";
+
+  const bubble = document.createElement("div");
+  bubble.className =
+    role === "user"
+      ? "inline-block bg-blue-600 text-white px-3 py-2 rounded-lg text-sm"
+      : "inline-block bg-slate-200 text-slate-900 px-3 py-2 rounded-lg text-sm";
+
+  bubble.textContent = text;
+  wrapper.appendChild(bubble);
+  chatBox.appendChild(wrapper);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+async function sendChatQuestion() {
+  if (!chatInput) return;
+  const message = chatInput.value.trim();
+  if (!message) {
+    showToast("Please enter a question for the AI.", "error");
+    return;
+  }
+
+  addChatMessage("user", message);
+  chatInput.value = "";
+
+  const thinkingDiv = document.createElement("div");
+  thinkingDiv.className = "mb-2 text-left";
+  const thinkingBubble = document.createElement("div");
+  thinkingBubble.className =
+    "inline-block bg-slate-100 text-slate-500 px-3 py-2 rounded-lg text-sm italic";
+  thinkingBubble.textContent = "Thinking...";
+  thinkingDiv.appendChild(thinkingBubble);
+  chatBox.appendChild(thinkingDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  try {
+    const res = await fetch("/api/llm-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+
+    const data = await res.json();
+    chatBox.removeChild(thinkingDiv);
+
+    if (!res.ok || data.error) {
+      addChatMessage(
+        "assistant",
+        data.error ||
+          "The AI service is temporarily unavailable. Please try again later."
+      );
+    } else {
+      addChatMessage(
+        "assistant",
+        data.answer || "No answer was returned by the AI."
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    chatBox.removeChild(thinkingDiv);
+    addChatMessage(
+      "assistant",
+      "Unable to contact the AI service. Please try again later."
+    );
+  }
+}
+
+if (chatSendBtn && chatInput) {
+  chatSendBtn.addEventListener("click", sendChatQuestion);
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendChatQuestion();
+    }
+  });
+}
+
+// Sidebar AI nav scroll
+if (navAi && aiSection) {
+  navAi.addEventListener("click", () => {
+    aiSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+// Initial load
 fetchStudents();

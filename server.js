@@ -2,6 +2,10 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs").promises;
 const cors = require("cors");
+const Groq = require("groq-sdk");
+require("dotenv").config();
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,7 +13,7 @@ const DATA_PATH = path.join(__dirname, "data", "students.json");
 
 // Middleware
 app.use(express.json());
-app.use(cors()); // safe because frontend is served from same server; kept for flexibility
+app.use(cors());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Helper: read students
@@ -47,22 +51,24 @@ app.post("/students", async (req, res) => {
     Gmail,
     Program,
     "Year Level": YearLevel,
-    University
+    University,
   } = req.body;
 
-  // Basic validation
-  if (!StudentID || !FullName || !Gender || !Gmail || !Program || YearLevel === undefined || !University) {
+  if (
+    !StudentID ||
+    !FullName ||
+    !Gender ||
+    !Gmail ||
+    !Program ||
+    YearLevel === undefined ||
+    !University
+  ) {
     return res.status(400).json({ error: "All fields are required." });
   }
 
-  // Optional: Year Level numeric check if user wants numeric
-  // (We allow string or number, but can enforce if necessary)
-  // if (isNaN(Number(YearLevel))) { ... }
-
   const students = await readStudents();
 
-  // Check unique Student ID
-  if (students.some(s => s["Student ID"] === StudentID)) {
+  if (students.some((s) => s["Student ID"] === StudentID)) {
     return res.status(409).json({ error: "Student ID already exists." });
   }
 
@@ -73,7 +79,7 @@ app.post("/students", async (req, res) => {
     Gmail,
     Program,
     "Year Level": YearLevel,
-    University
+    University,
   };
 
   students.push(newStudent);
@@ -90,7 +96,7 @@ app.post("/students", async (req, res) => {
 app.delete("/students/:id", async (req, res) => {
   const id = req.params.id;
   const students = await readStudents();
-  const index = students.findIndex(s => s["Student ID"] === id);
+  const index = students.findIndex((s) => s["Student ID"] === id);
 
   if (index === -1) {
     return res.status(404).json({ error: "Student not found." });
@@ -106,7 +112,107 @@ app.delete("/students/:id", async (req, res) => {
   }
 });
 
-// Fallback: serve index.html for any other route (SPA style)
+// POST /api/llm-chat -> ask Groq about students.json
+app.post("/api/llm-chat", async (req, res) => {
+  const { message } = req.body || {};
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({
+      question: message || "",
+      answer: null,
+      error: "Question cannot be empty.",
+    });
+  }
+
+  const students = await readStudents();
+
+  if (!Array.isArray(students) || students.length === 0) {
+    return res.status(200).json({
+      question: message,
+      answer:
+        "The student dataset is empty, so there is no data to analyze right now.",
+      error: null,
+    });
+  }
+
+  // Pre-calculate summaries
+  const totalStudents = students.length;
+  const maleCount = students.filter((s) => s.Gender === "Male").length;
+  const femaleCount = students.filter((s) => s.Gender === "Female").length;
+  
+  const programCounts = {};
+  students.forEach((s) => {
+    programCounts[s.Program] = (programCounts[s.Program] || 0) + 1;
+  });
+
+  const yearLevelCounts = {};
+  students.forEach((s) => {
+    yearLevelCounts[s["Year Level"]] = (yearLevelCounts[s["Year Level"]] || 0) + 1;
+  });
+
+  const systemPrompt =
+    "You are a data analyst for a student database. " +
+    "For COUNTING questions (how many, total), use the aggregate counts provided. " +
+    "For LOOKUP questions (find a student, list students by X), use the student list provided. " +
+    "Always use exact numbers and data from what is provided. Do NOT estimate or make up data.";
+
+  // Build compact student list (ID | Name | Gender | Program | Year)
+  const studentListText = students
+    .map((s) => `${s["Student ID"]} | ${s["Full Name"]} | ${s.Gender} | ${s.Program} | ${s["Year Level"]}`)
+    .join("\n");
+
+  const userPrompt =
+    `AGGREGATE STATISTICS:\n` +
+    `Total Students: ${totalStudents}\n` +
+    `Male: ${maleCount}, Female: ${femaleCount}\n\n` +
+    `By Program:\n${Object.entries(programCounts)
+      .map(([prog, count]) => `${prog}: ${count}`)
+      .join("\n")}\n\n` +
+    `By Year Level:\n${Object.entries(yearLevelCounts)
+      .map(([year, count]) => `${year}: ${count}`)
+      .join("\n")}\n\n` +
+    `STUDENT LIST (ID | Name | Gender | Program | Year):\n${studentListText}\n\n` +
+    `Question: "${message}"\n\n` +
+    `Instructions:\n` +
+    `- For counts, use the statistics above.\n` +
+    `- For lookups, search the student list above.\n` +
+    `- Answer with exact data only.`;
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0,
+      max_tokens: 500,
+    });
+
+    const answer =
+      completion.choices?.[0]?.message?.content?.trim() ||
+      "I could not generate an answer from the AI service.";
+
+    return res.json({
+      question: message,
+      answer,
+      error: null,
+    });
+  } catch (err) {
+    console.error("LLM error:", err.response?.data || err.message);
+    return res.status(503).json({
+      question: message,
+      answer: null,
+      error:
+        "The AI service is temporarily unavailable. Please try again later.",
+    });
+  }
+});
+
+
+
+
+// Fallback: serve index.html
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
