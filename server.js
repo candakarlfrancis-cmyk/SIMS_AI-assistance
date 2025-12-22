@@ -5,8 +5,10 @@ const cors = require("cors");
 const Groq = require("groq-sdk");
 require("dotenv").config();
 
+// Groq client
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Express app and config
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_PATH = path.join(__dirname, "data", "students.json");
@@ -118,9 +120,7 @@ app.post("/api/llm-chat", async (req, res) => {
     });
   }
 
-  // ===================================================
-  // 🔒 STRICT NAME-ONLY MODE (NO LLM ALLOWED)
-  // ===================================================
+  // STRICT NAME-ONLY MODE (NO LLM)
   if (
     (q.includes("name only") || q.includes("names only")) &&
     (q.includes("bsit") || q.includes("information technology"))
@@ -146,9 +146,7 @@ app.post("/api/llm-chat", async (req, res) => {
     });
   }
 
-  // ===================================================
   // COUNT QUESTIONS (DETERMINISTIC)
-  // ===================================================
   if (q.includes("how many") || q.includes("count")) {
     let filtered = [...students];
 
@@ -172,7 +170,7 @@ app.post("/api/llm-chat", async (req, res) => {
 
     if (q.includes("3rd") || q.includes("third")) {
       filtered = filtered.filter((s) =>
-        s["Year Level"].includes("3")
+        String(s["Year Level"]).includes("3")
       );
     }
 
@@ -183,9 +181,7 @@ app.post("/api/llm-chat", async (req, res) => {
     });
   }
 
-  // ===================================================
   // LIST QUESTIONS (DETERMINISTIC)
-  // ===================================================
   if (q.includes("list") || q.includes("show")) {
     let filtered = [...students];
 
@@ -214,9 +210,7 @@ app.post("/api/llm-chat", async (req, res) => {
     });
   }
 
-  // ===================================================
   // SUMMARY (DETERMINISTIC)
-  // ===================================================
   if (q.includes("summary") || q.includes("program")) {
     const counts = {};
     students.forEach((s) => {
@@ -236,9 +230,7 @@ app.post("/api/llm-chat", async (req, res) => {
     });
   }
 
-  // ===================================================
-  // 🤖 OPTIONAL LLM (NON-DATA QUESTIONS ONLY)
-  // ===================================================
+  // OPTIONAL LLM (NON-DATA QUESTIONS ONLY)
   try {
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -260,6 +252,7 @@ app.post("/api/llm-chat", async (req, res) => {
 
     return res.json({ question: message, answer, error: null });
   } catch (err) {
+    console.error("LLM error:", err.message);
     return res.status(503).json({
       question: message,
       answer: null,
@@ -273,6 +266,7 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+// START SERVER (Render uses process.env.PORT)
 app.listen(PORT, () => {
   console.log(`SIMS server running at http://localhost:${PORT}`);
 });
