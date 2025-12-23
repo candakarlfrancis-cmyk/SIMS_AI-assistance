@@ -256,7 +256,7 @@ app.post("/api/llm-chat", async (req, res) => {
     return res.status(503).json({
       question: message,
       answer: null,
-      error: "AI service unavailable.",
+      error: "I have no data to answer that right now.",
     });
   }
 });
